@@ -1,6 +1,8 @@
 package main
 
 import (
+	"crypto/rand"
+	"encoding/base64"
 	"fmt"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/bootdotdev/learn-file-storage-s3-golang-starter/internal/auth"
@@ -74,7 +76,24 @@ func (cfg *apiConfig) handlerUploadVideo(w http.ResponseWriter, r *http.Request)
 	}
 
 	assetFile.Seek(0, io.SeekStart)
-	key := "1a2b3c4d5e6f7890abcd1234ef567890.mp4"
+	aspectRatio, err := getVideoAspectRatio(assetFile.Name())
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Error getting aspect ratio", err)
+		return
+	}
+	prefix := ""
+	switch aspectRatio {
+	case "16:9":
+		prefix = "landscape/"
+	case "9:16":
+		prefix = "portrait/"
+	case "other":
+		prefix = "other/"
+	}
+
+	b := make([]byte, 32)
+	rand.Read(b)
+	key := prefix + base64.RawURLEncoding.EncodeToString(b) + ".mp4"
 	_, err = cfg.s3Client.PutObject(r.Context(), &s3.PutObjectInput{Bucket: &cfg.s3Bucket, Key: &key, Body: assetFile, ContentType: &mediaType})
 	if err != nil {
 		respondWithError(w, http.StatusInternalServerError, "Error uploading video", err)
