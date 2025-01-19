@@ -91,10 +91,23 @@ func (cfg *apiConfig) handlerUploadVideo(w http.ResponseWriter, r *http.Request)
 		prefix = "other/"
 	}
 
+	processedVideoPath, err := processVideoForFastStart(assetFile.Name())
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Error processing video", err)
+		return
+	}
+	processedVideo, err := os.OpenFile(processedVideoPath, os.O_RDONLY, 0644)
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Error opening video", err)
+		return
+	}
+	defer os.Remove(processedVideoPath)
+	defer processedVideo.Close()
+
 	b := make([]byte, 32)
 	rand.Read(b)
 	key := prefix + base64.RawURLEncoding.EncodeToString(b) + ".mp4"
-	_, err = cfg.s3Client.PutObject(r.Context(), &s3.PutObjectInput{Bucket: &cfg.s3Bucket, Key: &key, Body: assetFile, ContentType: &mediaType})
+	_, err = cfg.s3Client.PutObject(r.Context(), &s3.PutObjectInput{Bucket: &cfg.s3Bucket, Key: &key, Body: processedVideo, ContentType: &mediaType})
 	if err != nil {
 		respondWithError(w, http.StatusInternalServerError, "Error uploading video", err)
 		return
